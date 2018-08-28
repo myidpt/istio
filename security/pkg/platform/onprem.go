@@ -24,8 +24,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
-	"strings"
-
 	"istio.io/istio/security/pkg/pki/util"
 )
 
@@ -37,6 +35,8 @@ type OnPremClientImpl struct {
 	keyFile string
 	// The cert chain file
 	certChainFile string
+	// the type of SAN used in the certifcate.
+	sanType util.IdentityType
 }
 
 // CitadelDNSSan is the hardcoded DNS SAN used to identify citadel server.
@@ -44,7 +44,7 @@ type OnPremClientImpl struct {
 const CitadelDNSSan = "istio-citadel"
 
 // NewOnPremClientImpl creates a new OnPremClientImpl.
-func NewOnPremClientImpl(rootCert, key, certChain string) (*OnPremClientImpl, error) {
+func NewOnPremClientImpl(rootCert, key, certChain string, sanType util.IdentityType) (*OnPremClientImpl, error) {
 	if _, err := os.Stat(rootCert); err != nil {
 		return nil, fmt.Errorf("failed to create onprem client root cert file %v error %v", rootCert, err)
 	}
@@ -54,7 +54,7 @@ func NewOnPremClientImpl(rootCert, key, certChain string) (*OnPremClientImpl, er
 	if _, err := os.Stat(certChain); err != nil {
 		return nil, fmt.Errorf("failed to create onprem client certChain file %v", err)
 	}
-	return &OnPremClientImpl{rootCert, key, certChain}, nil
+	return &OnPremClientImpl{rootCert, key, certChain, sanType}, nil
 }
 
 // GetDialOptions returns the GRPC dial options to connect to the CA.
@@ -85,17 +85,12 @@ func (ci *OnPremClientImpl) GetServiceIdentity() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	serviceIDs, err := util.ExtractIDs(cert.Extensions)
+	serviceIDs, err := util.ExtractIDs(cert.Extensions, ci.sanType)
 	if err != nil {
 		return "", err
 	}
 	if len(serviceIDs) != 1 {
-		for _, s := range serviceIDs {
-			if strings.HasPrefix(s, "spiffe://") {
-				return s, nil
-			}
-		}
-		return "", fmt.Errorf("cert does not have siffe:// SAN fields")
+		return "", fmt.Errorf("failed to find identity: %v", serviceIDs)
 	}
 	return serviceIDs[0], nil
 }

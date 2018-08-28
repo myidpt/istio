@@ -32,7 +32,8 @@ type ListAuthChecker struct {
 	ids      map[string]struct{}
 
 	// overridable functions for testing
-	extractIDsFn func(exts []pkix.Extension) ([]string, error)
+	// TODO(incfly): should reconsider what to do since security lib are used by other components.
+	extractIDsFn func(exts []pkix.Extension, sanType ...util.IdentityType) ([]string, error)
 }
 
 var _ AuthChecker = &ListAuthChecker{}

@@ -16,6 +16,8 @@ package caclient
 
 import (
 	"time"
+
+	"istio.io/istio/security/pkg/pki/util"
 )
 
 // Config is configuration for the CA client.
@@ -64,5 +66,5 @@ type Config struct {
 	RootCertFile string
 
 	// SANType specifies the type of SAN used in the certificate, supported values, spiffe, dnsname.
-	SANType string
+	SANType util.IdentityType
 }

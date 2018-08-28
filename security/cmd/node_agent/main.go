@@ -26,10 +26,12 @@ import (
 	"istio.io/istio/pkg/version"
 	"istio.io/istio/security/pkg/cmd"
 	nvm "istio.io/istio/security/pkg/nodeagent/vm"
+	"istio.io/istio/security/pkg/pki/util"
 )
 
 var (
-	naConfig = nvm.NewConfig()
+	naConfig   = nvm.NewConfig()
+	sanTypeArg string
 
 	rootCmd = &cobra.Command{
 		Use:   "node_agent",
@@ -69,7 +71,7 @@ func init() {
 		"key", "/etc/certs/key.pem", "Node Agent private key file")
 	flags.StringVar(&cAClientConfig.RootCertFile, "root-cert",
 		"/etc/certs/root-cert.pem", "Root Certificate file")
-	flags.StringVar(&caClientConfig.SANType, "san-type",
+	flags.StringVar(&sanTypeArg, "san-type",
 		"spiffe", "The type of SAN we requested in the certificate, can be spiffe | dnsname")
 
 	flags.BoolVar(&naConfig.DualUse, "experimental-dual-use",
@@ -80,6 +82,12 @@ func init() {
 }
 
 func main() {
+	sanType, err := util.LookupSANType(sanTypeArg)
+	if err != nil {
+		log.Errora(err)
+		os.Exit(-1)
+	}
+	naConfig.CAClientConfig.SANType = sanType
 	if naConfig.CAClientConfig.Platform == "vm" {
 		if err := rootCmd.Execute(); err != nil {
 			log.Errora(err)

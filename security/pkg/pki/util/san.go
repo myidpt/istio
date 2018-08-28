@@ -75,6 +75,19 @@ type Identity struct {
 	Value []byte
 }
 
+// LookupSANType returns corresponding IdentityType given a string.
+// TODO(incfly): redefine IdentityType as type string to avoid the need of this.
+func LookupSANType(name string) (IdentityType, error) {
+	switch name {
+	case "dnsname":
+		return TypeDNS, nil
+	case "spiffe":
+		return TypeURI, nil
+	default:
+		return TypeDNS, fmt.Errorf("not supported identity type %v", name)
+	}
+}
+
 // BuildSubjectAltNameExtension builds the SAN extension for the certificate.
 func BuildSubjectAltNameExtension(hosts string) (*pkix.Extension, error) {
 	ids := []Identity{}
@@ -177,7 +190,10 @@ func ExtractSANExtension(exts []pkix.Extension) *pkix.Extension {
 
 // ExtractIDs first finds the SAN extension from the given extension set, then
 // extract identities from the SAN extension.
-func ExtractIDs(exts []pkix.Extension) ([]string, error) {
+func ExtractIDs(exts []pkix.Extension, sanTypes ...IdentityType) ([]string, error) {
+	if len(sanTypes) > 1 {
+		return nil, fmt.Errorf("only support zero or one SAN type specified")
+	}
 	sanExt := ExtractSANExtension(exts)
 	if sanExt == nil {
 		return nil, fmt.Errorf("the SAN extension does not exist")
@@ -190,10 +206,25 @@ func ExtractIDs(exts []pkix.Extension) ([]string, error) {
 
 	ids := []string{}
 	for _, id := range idsWithType {
-		ids = append(ids, string(id.Value))
+		if len(sanTypes) == 1 {
+			if sanTypes[0] == id.Type {
+				ids = append(ids, string(id.Value))
+			}
+		} else {
+			ids = append(ids, string(id.Value))
+		}
 	}
 	return ids, nil
 }
+
+// ExtractIDByType returns the specified typed SAN.
+// func ExtractIDByType(exts []pkix.Extension, sanType IdentityType) (string, error) {
+// 	ids, err := ExtractIDsFromSAN(exts)
+// 	if err != nil {
+// 		return
+// 	}
+// 	return "", fmt.Errorf("not found")
+// }
 
 // GenSanURI returns the formatted uri(SPIFFEE format for now) for the certificate.
 func GenSanURI(ns, serviceAccount string) (string, error) {

@@ -19,6 +19,7 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 	"google.golang.org/grpc"
+	"istio.io/istio/security/pkg/pki/util"
 )
 
 // Client is the interface for implementing the client to access platform metadata.
@@ -36,10 +37,10 @@ type Client interface {
 }
 
 // NewClient is the function to create implementations of the platform metadata client.
-func NewClient(platform, rootCertFile, keyFile, certChainFile, caAddr string) (Client, error) {
+func NewClient(platform, rootCertFile, keyFile, certChainFile, caAddr string, sanType util.IdentityType) (Client, error) {
 	switch platform {
 	case "onprem":
-		return NewOnPremClientImpl(rootCertFile, keyFile, certChainFile)
+		return NewOnPremClientImpl(rootCertFile, keyFile, certChainFile, sanType)
 	case "gcp":
 		return NewGcpClientImpl(rootCertFile, caAddr), nil
 	case "aws":
@@ -48,7 +49,7 @@ func NewClient(platform, rootCertFile, keyFile, certChainFile, caAddr string) (C
 		if metadata.OnGCE() {
 			return NewGcpClientImpl(rootCertFile, caAddr), nil
 		}
-		return NewOnPremClientImpl(rootCertFile, keyFile, certChainFile)
+		return NewOnPremClientImpl(rootCertFile, keyFile, certChainFile, sanType)
 	default:
 		return nil, fmt.Errorf("invalid env %s specified", platform)
 	}

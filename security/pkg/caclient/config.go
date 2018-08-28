@@ -62,4 +62,7 @@ type Config struct {
 
 	// RootCertFile defines the root cert of the CA client.
 	RootCertFile string
+
+	// SANType specifies the type of SAN used in the certificate, supported values, spiffe, dnsname.
+	SANType string
 }

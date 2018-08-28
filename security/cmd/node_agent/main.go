@@ -69,6 +69,8 @@ func init() {
 		"key", "/etc/certs/key.pem", "Node Agent private key file")
 	flags.StringVar(&cAClientConfig.RootCertFile, "root-cert",
 		"/etc/certs/root-cert.pem", "Root Certificate file")
+	flags.StringVar(&caClientConfig.SANType, "san-type",
+		"spiffe", "The type of SAN we requested in the certificate, can be spiffe | dnsname")
 
 	flags.BoolVar(&naConfig.DualUse, "experimental-dual-use",
 		false, "Enable dual-use mode. Generates certificates with a CommonName identical to the SAN.")

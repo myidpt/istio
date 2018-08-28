@@ -37,10 +37,10 @@ type Client interface {
 }
 
 // NewClient is the function to create implementations of the platform metadata client.
-func NewClient(platform, rootCertFile, keyFile, certChainFile, caAddr string, sanType util.IdentityType) (Client, error) {
+func NewClient(platform, rootCertFile, keyFile, certChainFile, caAddr string, format util.SubjectFormat) (Client, error) {
 	switch platform {
 	case "onprem":
-		return NewOnPremClientImpl(rootCertFile, keyFile, certChainFile, sanType)
+		return NewOnPremClientImpl(rootCertFile, keyFile, certChainFile, format)
 	case "gcp":
 		return NewGcpClientImpl(rootCertFile, caAddr), nil
 	case "aws":
@@ -49,7 +49,7 @@ func NewClient(platform, rootCertFile, keyFile, certChainFile, caAddr string, sa
 		if metadata.OnGCE() {
 			return NewGcpClientImpl(rootCertFile, caAddr), nil
 		}
-		return NewOnPremClientImpl(rootCertFile, keyFile, certChainFile, sanType)
+		return NewOnPremClientImpl(rootCertFile, keyFile, certChainFile, format)
 	default:
 		return nil, fmt.Errorf("invalid env %s specified", platform)
 	}

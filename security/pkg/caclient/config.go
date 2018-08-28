@@ -65,6 +65,6 @@ type Config struct {
 	// RootCertFile defines the root cert of the CA client.
 	RootCertFile string
 
-	// SANType specifies the type of SAN used in the certificate, supported values, spiffe, dnsname.
-	SANType util.IdentityType
+	// SubjectFormat specifies where and how we stores the certificate subject.
+	SubjectFormat util.SubjectFormat
 }

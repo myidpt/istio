@@ -15,6 +15,7 @@
 package util
 
 import (
+	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"fmt"
@@ -25,6 +26,16 @@ import (
 // IdentityType represents type of an identity. This is used to properly encode
 // an identity into a SAN extension.
 type IdentityType int
+
+// SubjectFormat decides how we stores the subject in the certificate.
+type SubjectFormat string
+
+const (
+	DNSSan     SubjectFormat = "dns-san"
+	IPSan      SubjectFormat = "ip-san"
+	URISan     SubjectFormat = "uri-san"
+	CommonName SubjectFormat = "common-name"
+)
 
 const (
 	// URIScheme is the URI scheme for Istio identities.
@@ -190,10 +201,7 @@ func ExtractSANExtension(exts []pkix.Extension) *pkix.Extension {
 
 // ExtractIDs first finds the SAN extension from the given extension set, then
 // extract identities from the SAN extension.
-func ExtractIDs(exts []pkix.Extension, sanTypes ...IdentityType) ([]string, error) {
-	if len(sanTypes) > 1 {
-		return nil, fmt.Errorf("only support zero or one SAN type specified")
-	}
+func ExtractIDs(exts []pkix.Extension) ([]string, error) {
 	sanExt := ExtractSANExtension(exts)
 	if sanExt == nil {
 		return nil, fmt.Errorf("the SAN extension does not exist")
@@ -206,25 +214,40 @@ func ExtractIDs(exts []pkix.Extension, sanTypes ...IdentityType) ([]string, erro
 
 	ids := []string{}
 	for _, id := range idsWithType {
-		if len(sanTypes) == 1 {
-			if sanTypes[0] == id.Type {
-				ids = append(ids, string(id.Value))
-			}
-		} else {
-			ids = append(ids, string(id.Value))
-		}
+		ids = append(ids, string(id.Value))
 	}
 	return ids, nil
 }
 
-// ExtractIDByType returns the specified typed SAN.
-// func ExtractIDByType(exts []pkix.Extension, sanType IdentityType) (string, error) {
-// 	ids, err := ExtractIDsFromSAN(exts)
-// 	if err != nil {
-// 		return
-// 	}
-// 	return "", fmt.Errorf("not found")
-// }
+// ExtractIDFromCert returns the specified type of the subject from the certificate.
+func ExtractIDFromCert(cert *x509.Certificate, format SubjectFormat) (string, error) {
+	if format == CommonName {
+		return cert.Subject.CommonName, nil
+	}
+
+	sanExt := ExtractSANExtension(cert.Extensions)
+	if sanExt == nil {
+		return "", fmt.Errorf("the SAN extension does not exist")
+	}
+
+	idsWithType, err := ExtractIDsFromSAN(sanExt)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract identities from SAN extension (error %v)", err)
+	}
+	for _, id := range idsWithType {
+		if format == DNSSan && id.Type == TypeDNS {
+			return string(id.Value), nil
+		}
+		if format == IPSan && id.Type == TypeIP {
+			return string(id.Value), nil
+		}
+		if format == URISan && id.Type == TypeURI {
+			return string(id.Value), nil
+		}
+	}
+
+	return "", fmt.Errorf("failed to find specified subject in the certifcate")
+}
 
 // GenSanURI returns the formatted uri(SPIFFEE format for now) for the certificate.
 func GenSanURI(ns, serviceAccount string) (string, error) {

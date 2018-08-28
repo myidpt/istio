@@ -35,8 +35,8 @@ type OnPremClientImpl struct {
 	keyFile string
 	// The cert chain file
 	certChainFile string
-	// the type of SAN used in the certifcate.
-	sanType util.IdentityType
+	// where we store the subject in the certificate.
+	subjectFormat util.SubjectFormat
 }
 
 // CitadelDNSSan is the hardcoded DNS SAN used to identify citadel server.
@@ -44,7 +44,7 @@ type OnPremClientImpl struct {
 const CitadelDNSSan = "istio-citadel"
 
 // NewOnPremClientImpl creates a new OnPremClientImpl.
-func NewOnPremClientImpl(rootCert, key, certChain string, sanType util.IdentityType) (*OnPremClientImpl, error) {
+func NewOnPremClientImpl(rootCert, key, certChain string, subjectFormat util.SubjectFormat) (*OnPremClientImpl, error) {
 	if _, err := os.Stat(rootCert); err != nil {
 		return nil, fmt.Errorf("failed to create onprem client root cert file %v error %v", rootCert, err)
 	}
@@ -54,7 +54,7 @@ func NewOnPremClientImpl(rootCert, key, certChain string, sanType util.IdentityT
 	if _, err := os.Stat(certChain); err != nil {
 		return nil, fmt.Errorf("failed to create onprem client certChain file %v", err)
 	}
-	return &OnPremClientImpl{rootCert, key, certChain, sanType}, nil
+	return &OnPremClientImpl{rootCert, key, certChain, subjectFormat}, nil
 }
 
 // GetDialOptions returns the GRPC dial options to connect to the CA.
@@ -85,14 +85,11 @@ func (ci *OnPremClientImpl) GetServiceIdentity() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	serviceIDs, err := util.ExtractIDs(cert.Extensions, ci.sanType)
+	subject, err := util.ExtractIDFromCert(cert, ci.subjectFormat)
 	if err != nil {
 		return "", err
 	}
-	if len(serviceIDs) != 1 {
-		return "", fmt.Errorf("failed to find identity: %v", serviceIDs)
-	}
-	return serviceIDs[0], nil
+	return subject, nil
 }
 
 // GetAgentCredential passes the certificate to control plane to authenticate

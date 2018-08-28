@@ -490,7 +490,7 @@ func createKeyCertBundleRotator(keycert pkiutil.KeyCertBundle) (keyCertBundleRot
 	config.CSRGracePeriodPercentage = defaultCSRGracePeriodPercentage
 	config.CSRMaxRetries = defaultCSRMaxRetries
 	config.CSRInitialRetrialInterval = defaultCSRInitialRetrialInterval
-	pc, err := platform.NewClient(config.Env, config.RootCertFile, config.KeyFile, config.CertChainFile, config.CAAddress, util.TypeURI)
+	pc, err := platform.NewClient(config.Env, config.RootCertFile, config.KeyFile, config.CertChainFile, config.CAAddress, util.URISan)
 	if err != nil {
 		return nil, err
 	}

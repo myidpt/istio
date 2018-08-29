@@ -72,6 +72,9 @@ type CertOptions struct {
 
 	// Whether this certificate is for dual-use clients (SAN+CN).
 	IsDualUse bool
+
+	// SubjectFormat determins which field and the format we mint host in the certificate.
+	SubjectFormat SubjectFormat
 }
 
 // GenCertKeyFromOptions generates a X.509 certificate and a private key with the given options.
@@ -165,13 +168,13 @@ func genCertTemplateFromCSR(csr *x509.CertificateRequest, ttl time.Duration, isC
 	}
 
 	return &x509.Certificate{
-		SerialNumber: serialNum,
-		Subject:      csr.Subject,
-		NotBefore:    now,
-		NotAfter:     now.Add(ttl),
-		KeyUsage:     keyUsage,
-		ExtKeyUsage:  extKeyUsages,
-		IsCA:         isCA,
+		SerialNumber:          serialNum,
+		Subject:               csr.Subject,
+		NotBefore:             now,
+		NotAfter:              now.Add(ttl),
+		KeyUsage:              keyUsage,
+		ExtKeyUsage:           extKeyUsages,
+		IsCA:                  isCA,
 		BasicConstraintsValid: true,
 		ExtraExtensions:       exts,
 		DNSNames:              csr.DNSNames,
@@ -212,35 +215,47 @@ func genCertTemplateFromOptions(options CertOptions) (*x509.Certificate, error) 
 	subject := pkix.Name{
 		Organization: []string{options.Org},
 	}
+	cert := &x509.Certificate{
+		SerialNumber:          serialNum,
+		Subject:               subject,
+		NotBefore:             notBefore,
+		NotAfter:              notBefore.Add(options.TTL),
+		KeyUsage:              keyUsage,
+		ExtKeyUsage:           extKeyUsages,
+		IsCA:                  options.IsCA,
+		BasicConstraintsValid: true,
+	}
 
-	exts := []pkix.Extension{}
-	if h := options.Host; len(h) > 0 {
-		s, err := BuildSubjectAltNameExtension(h)
+	// TODO: should we consider this an error?
+	h := options.Host
+	if len(h) == 0 {
+		return cert, nil
+	}
+	// Only common name case.
+	if options.SubjectFormat == CommonName {
+		cn, err := DualUseCommonName(h)
 		if err != nil {
 			return nil, err
 		}
-		if options.IsDualUse {
-			cn, err := DualUseCommonName(h)
-			if err != nil {
-				// log and continue
-				log.Errorf("dual-use failed for cert template - omitting CN (%v)", err)
-			} else {
-				subject.CommonName = cn
-			}
-		}
-		exts = []pkix.Extension{*s}
+		cert.Subject.CommonName = cn
+		return cert, nil
 	}
-
-	return &x509.Certificate{
-		SerialNumber: serialNum,
-		Subject:      subject,
-		NotBefore:    notBefore,
-		NotAfter:     notBefore.Add(options.TTL),
-		KeyUsage:     keyUsage,
-		ExtKeyUsage:  extKeyUsages,
-		IsCA:         options.IsCA,
-		BasicConstraintsValid: true,
-		ExtraExtensions:       exts}, nil
+	// SAN case.
+	s, err := BuildSubjectAltNameExtension(h)
+	if err != nil {
+		return nil, err
+	}
+	if options.IsDualUse {
+		cn, err := DualUseCommonName(h)
+		if err != nil {
+			// log and continue
+			log.Errorf("dual-use failed for cert template - omitting CN (%v)", err)
+		} else {
+			cert.Subject.CommonName = cn
+		}
+	}
+	cert.ExtraExtensions = []pkix.Extension{*s}
+	return cert, nil
 }
 
 func genSerialNum() (*big.Int, error) {

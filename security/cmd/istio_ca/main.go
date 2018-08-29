@@ -37,6 +37,7 @@ import (
 	"istio.io/istio/security/pkg/cmd"
 	"istio.io/istio/security/pkg/pki/ca"
 	"istio.io/istio/security/pkg/pki/ca/controller"
+	"istio.io/istio/security/pkg/pki/util"
 	pkiutil "istio.io/istio/security/pkg/pki/util"
 	"istio.io/istio/security/pkg/platform"
 	probecontroller "istio.io/istio/security/pkg/probe"
@@ -489,7 +490,7 @@ func createKeyCertBundleRotator(keycert pkiutil.KeyCertBundle) (keyCertBundleRot
 	config.CSRGracePeriodPercentage = defaultCSRGracePeriodPercentage
 	config.CSRMaxRetries = defaultCSRMaxRetries
 	config.CSRInitialRetrialInterval = defaultCSRInitialRetrialInterval
-	pc, err := platform.NewClient(config.Env, config.RootCertFile, config.KeyFile, config.CertChainFile, config.CAAddress)
+	pc, err := platform.NewClient(config.Env, config.RootCertFile, config.KeyFile, config.CertChainFile, config.CAAddress, util.URISan)
 	if err != nil {
 		return nil, err
 	}

@@ -15,6 +15,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"time"
 
@@ -26,10 +27,12 @@ import (
 	"istio.io/istio/pkg/version"
 	"istio.io/istio/security/pkg/cmd"
 	nvm "istio.io/istio/security/pkg/nodeagent/vm"
+	"istio.io/istio/security/pkg/pki/util"
 )
 
 var (
-	naConfig = nvm.NewConfig()
+	naConfig         = nvm.NewConfig()
+	subjectFormatArg string
 
 	rootCmd = &cobra.Command{
 		Use:   "node_agent",
@@ -69,6 +72,9 @@ func init() {
 		"key", "/etc/certs/key.pem", "Node Agent private key file")
 	flags.StringVar(&cAClientConfig.RootCertFile, "root-cert",
 		"/etc/certs/root-cert.pem", "Root Certificate file")
+	flags.StringVar(&subjectFormatArg, "subject-format",
+		"spiffe", "The format of the subject and where it's stored in the certificate, can be spiffe | dns-san | common-name."+
+			"Other than common-name option, all others are stored in SAN fields.")
 
 	flags.BoolVar(&naConfig.DualUse, "experimental-dual-use",
 		false, "Enable dual-use mode. Generates certificates with a CommonName identical to the SAN.")
@@ -77,7 +83,27 @@ func init() {
 	cmd.InitializeFlags(rootCmd)
 }
 
+func convertSubjectFormat(arg string) (util.SubjectFormat, error) {
+	switch arg {
+	case "spiffe":
+		return util.URISan, nil
+	case "dns-san":
+		return util.DNSSan, nil
+	case "common-name":
+		return util.CommonName, nil
+	default:
+		return util.URISan, fmt.Errorf("unsupported subject format value %v", arg)
+	}
+}
+
 func main() {
+	format, err := convertSubjectFormat(subjectFormatArg)
+	if err != nil {
+		log.Errora(err)
+		os.Exit(-1)
+	}
+	naConfig.CAClientConfig.SubjectFormat = format
+
 	if naConfig.CAClientConfig.Platform == "vm" {
 		if err := rootCmd.Execute(); err != nil {
 			log.Errora(err)

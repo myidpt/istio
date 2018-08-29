@@ -1,23 +1,26 @@
 // Program citadel_cli is used for the admin operator to register, bootstrap identity and credentials.
 // Example:
 // `citactl create service-a.example.com`, requests a key certificate pair signed by Citadel.
+// TODO: security/tools/gencert can be merged as a subcommand here.
 package main
 
 import (
-	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"time"
 
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
+	"istio.io/istio/security/pkg/nodeagent/secrets"
+	"istio.io/istio/security/pkg/pki/ca"
 	"istio.io/istio/security/pkg/pki/util"
-	"istio.io/istio/security/pkg/platform"
-	pb "istio.io/istio/security/proto"
 )
 
 var (
-	citadel string // citadelAddress
+	citadel    string // citadelAddress
+	signerKey  string
+	signerCert string
+	rootCert   string
 )
 
 var (
@@ -47,9 +50,8 @@ Citadel identity control management for admin operator.
 // Create fetches a key cert pairm, signed by Citadel.Create
 // The returned ceritifcate with `subject` encoded in the field specified by `format`.
 // TODO: remove hardcoded values and configurable.
+// TODO: consider to use citadel's CSR API later.
 func Create(format, subject string) error {
-	// TODO: code is duplicated in several places, (vm node agent, caclient, citactl).
-	// Need refactor for de-duplication
 	csr, privKey, err := util.GenCSR(util.CertOptions{
 		Host:       subject,
 		Org:        "example.com",
@@ -58,42 +60,37 @@ func Create(format, subject string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("private key remove me...", privKey)
-	req := &pb.CsrRequest{
-		CsrPem: csr,
-		// NodeAgentCredential: cred,
-		// CredentialType:      c.platformClient.GetCredentialType(),
-		RequestedTtlMinutes: 600,
-	}
-	onprem, err := platform.NewOnPremClientImpl("./root.cert", "./key.pem", "./cert-chain.pem")
 	if err != nil {
 		return err
 	}
-	opts, err := onprem.GetDialOptions()
+	kb, err := util.NewVerifiedKeyCertBundleFromFile(signerCert, signerKey, signerCert, rootCert)
 	if err != nil {
 		return err
 	}
-	conn, err := grpc.Dial(citadel, opts...)
+	ca, err := ca.NewIstioCA(&ca.IstioCAOptions{
+		CertTTL:       time.Hour * 24,
+		MaxCertTTL:    time.Hour * 48,
+		KeyCertBundle: kb,
+	})
+	cert, err := ca.Sign(csr, time.Hour*24, false)
 	if err != nil {
 		return err
 	}
-	client := pb.NewIstioCAServiceClient(conn)
-	resp, err := client.HandleCSR(context.Background(), req)
-	if err == nil && resp != nil && resp.IsApproved {
-		return nil
+	fmt.Printf("Saving key cert for %v...\n", subject)
+	if err := ioutil.WriteFile("service-key.pem", privKey, secrets.KeyFilePermission); err != nil {
+		return err
 	}
-	if resp == nil {
-		return fmt.Errorf("CSR signing failed: response empty")
-	}
-	if !resp.IsApproved {
-		return fmt.Errorf("CSR signing failed: request not approved")
+	if err := ioutil.WriteFile("service-cert.pem", cert, secrets.CertFilePermission); err != nil {
+		return err
 	}
 	return nil
 }
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&citadel, "citadel", "localhost:15000", "Citadel server address")
-	rootCmd.PersistentFlags().String("root-cert", "root.cert", "The output path for the root cert.")
+	rootCmd.PersistentFlags().StringVar(&rootCert, "root-cert", "root.cert", "The input path for the root cert.")
+	rootCmd.PersistentFlags().StringVar(&signerKey, "signer-key", "ca.key", "input signer key path.")
+	rootCmd.PersistentFlags().StringVar(&signerCert, "signer-cert", "ca.cert", "input signer cert path.")
 	createCmd.PersistentFlags().Duration("duration", time.Hour*24,
 		"The TTL of the generated certificate, default 24 hours.")
 }

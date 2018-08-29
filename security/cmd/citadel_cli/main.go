@@ -6,12 +6,18 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"istio.io/istio/security/pkg/pki/util"
+	"istio.io/istio/security/pkg/platform"
 	pb "istio.io/istio/security/proto"
+)
+
+var (
+	citadel string // citadelAddress
 )
 
 var (
@@ -29,27 +35,25 @@ Citadel identity control management for admin operator.
 		Short: "Generates a certificate for a service.",
 		Example: "citactl create dns www.service-a.example.com, obtains a key and certificate with " +
 			"www.service-a.example.com as DNS SAN field.",
-		Args: func(cmd *cobra.Command, args []string) error {
-			// TODO(incfly): args validation.
-			return nil
-		},
+		Args: cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error {
-			return Create(args[0], args[1])
+			format := args[0]
+			subject := args[1]
+			return Create(format, subject)
 		},
 	}
 )
 
 // Create fetches a key cert pairm, signed by Citadel.Create
 // The returned ceritifcate with `subject` encoded in the field specified by `format`.
+// TODO: remove hardcoded values and configurable.
 func Create(format, subject string) error {
-	// TODO(incfly): this code is duplicated in several places, (vm node agent, caclient, citactl).
-	// Need refactor for de-duplication.
-
+	// TODO: code is duplicated in several places, (vm node agent, caclient, citactl).
+	// Need refactor for de-duplication
 	csr, privKey, err := util.GenCSR(util.CertOptions{
-		Host: subject,
-		// Org:        na.config.CAClientConfig.Org,
-		// RSAKeySize: na.config.CAClientConfig.RSAKeySize,
-		// IsDualUse:  na.config.DualUse,
+		Host:       subject,
+		Org:        "example.com",
+		RSAKeySize: 2048,
 	})
 	if err != nil {
 		return err
@@ -59,9 +63,17 @@ func Create(format, subject string) error {
 		CsrPem: csr,
 		// NodeAgentCredential: cred,
 		// CredentialType:      c.platformClient.GetCredentialType(),
-		// RequestedTtlMinutes: int32(opts.TTL.Minutes()),
+		RequestedTtlMinutes: 600,
 	}
-	conn, err := grpc.Dial("localhost")
+	onprem, err := platform.NewOnPremClientImpl("./root.cert", "./key.pem", "./cert-chain.pem")
+	if err != nil {
+		return err
+	}
+	opts, err := onprem.GetDialOptions()
+	if err != nil {
+		return err
+	}
+	conn, err := grpc.Dial(citadel, opts...)
 	if err != nil {
 		return err
 	}
@@ -80,7 +92,7 @@ func Create(format, subject string) error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().String("citadel", "localhost:15000", "Citadel server address")
+	rootCmd.PersistentFlags().StringVar(&citadel, "citadel", "localhost:15000", "Citadel server address")
 	rootCmd.PersistentFlags().String("root-cert", "root.cert", "The output path for the root cert.")
 	createCmd.PersistentFlags().Duration("duration", time.Hour*24,
 		"The TTL of the generated certificate, default 24 hours.")
@@ -88,4 +100,7 @@ func init() {
 
 func main() {
 	rootCmd.AddCommand(createCmd)
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err)
+	}
 }

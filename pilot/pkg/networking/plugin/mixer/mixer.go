@@ -131,7 +131,7 @@ func (mixerplugin) OnInboundListener(in *plugin.InputParams, mutable *plugin.Mut
 }
 
 // OnOutboundCluster implements the Plugin interface method.
-func (mixerplugin) OnOutboundCluster(env *model.Environment, node *model.Proxy, push *model.PushContext,
+func (mixerplugin) OnOutboundCluster(env *model.Environment, push *model.PushContext,
 	service *model.Service, servicePort *model.Port, cluster *xdsapi.Cluster) {
 	// do nothing
 }
@@ -346,7 +346,6 @@ func addDestinationServiceAttributes(attrs attributes, push *model.PushContext, 
 	if destinationHostname == "" {
 		return attrs
 	}
-	attrs["destination.service"] = attrStringValue(string(destinationHostname)) // DEPRECATED. Remove when fully out of use.
 	attrs["destination.service.host"] = attrStringValue(string(destinationHostname))
 
 	svc := push.ServiceByHostname[destinationHostname]

@@ -418,14 +418,15 @@ func (ds *DiscoveryService) ClearCache() {
 func debouncePush(startDebounce time.Time) {
 	clearCacheMutex.Lock()
 	since := time.Since(lastClearCacheEvent)
+	events := clearCacheEvents
 	clearCacheMutex.Unlock()
 
 	if since > 2*DebounceAfter ||
 		time.Since(startDebounce) > DebounceMax {
 
 		log.Infof("Push debounce stable %d: %v since last change, %v since last push",
-			clearCacheEvents,
-			time.Since(lastClearCacheEvent), time.Since(lastClearCache))
+			events,
+			since, time.Since(lastClearCache))
 		clearCacheMutex.Lock()
 		clearCacheTimerSet = false
 		lastClearCache = time.Now()
@@ -433,8 +434,8 @@ func debouncePush(startDebounce time.Time) {
 		V2ClearCache()
 	} else {
 		log.Infof("Push debounce %d: %v since last change, %v since last push",
-			clearCacheEvents,
-			time.Since(lastClearCacheEvent), time.Since(lastClearCache))
+			events,
+			since, time.Since(lastClearCache))
 		time.AfterFunc(DebounceAfter, func() {
 			debouncePush(startDebounce)
 		})
@@ -524,7 +525,7 @@ func (ds *DiscoveryService) ListAllEndpoints(_ *restful.Request, response *restf
 		if !service.External() {
 			for _, port := range service.Ports {
 				hosts := make([]*host, 0)
-				instances, err := ds.Instances(service.Hostname, []string{port.Name}, nil)
+				instances, err := ds.InstancesByPort(service.Hostname, port.Port, nil)
 				if err != nil {
 					// If client experiences an error, 503 error will tell envoy to keep its current
 					// cache and try again later

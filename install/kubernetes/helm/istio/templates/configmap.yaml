@@ -82,6 +82,10 @@ data:
       # for more details
       proxyAdminPort: 15000
       #
+      # Set concurrency to a specific number to control the number of Proxy worker threads.
+      # If set to 0 (default), then start worker thread for each CPU thread/core.
+      concurrency: {{ .Values.global.proxy.concurrency }}
+      #
       # Zipkin trace collector
       zipkinAddress: zipkin.{{ .Release.Namespace }}:9411
 
@@ -97,13 +101,13 @@ data:
       controlPlaneAuthPolicy: MUTUAL_TLS
       #
       # Address where istio Pilot service is running
-      discoveryAddress: istio-pilot.{{ .Release.Namespace }}:15005
+      discoveryAddress: istio-pilot.{{ .Release.Namespace }}:15011
     {{- else }}
       #
       # Mutual TLS authentication between sidecars and istio control plane.
       controlPlaneAuthPolicy: NONE
       #
       # Address where istio Pilot service is running
-      discoveryAddress: istio-pilot.{{ .Release.Namespace }}:15007
+      discoveryAddress: istio-pilot.{{ .Release.Namespace }}:15010
     {{- end }}
 {{- end }}

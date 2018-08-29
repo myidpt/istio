@@ -70,8 +70,8 @@ var (
 
 	rootCmd = &cobra.Command{
 		Use:          "pilot-agent",
-		Short:        "Istio Pilot agent",
-		Long:         "Istio Pilot agent runs in the side car or gateway container and bootstraps envoy.",
+		Short:        "Istio Pilot agent.",
+		Long:         "Istio Pilot agent runs in the sidecar or gateway container and bootstraps Envoy.",
 		SilenceUsage: true,
 	}
 
@@ -79,6 +79,7 @@ var (
 		Use:   "proxy",
 		Short: "Envoy proxy agent",
 		RunE: func(c *cobra.Command, args []string) error {
+			cmd.PrintFlags(c.Flags())
 			if err := log.Configure(loggingOptions); err != nil {
 				return err
 			}
@@ -125,7 +126,7 @@ var (
 
 			log.Infof("Proxy role: %#v", role)
 
-			proxyConfig := meshconfig.ProxyConfig{}
+			proxyConfig := model.DefaultProxyConfig()
 
 			// set all flags
 			proxyConfig.AvailabilityZone = availabilityZone

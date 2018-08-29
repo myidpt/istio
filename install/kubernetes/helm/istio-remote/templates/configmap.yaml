@@ -72,6 +72,10 @@ data:
       # https://lyft.github.io/envoy/docs/operations/admin.html
       # for more details
       proxyAdminPort: 15000
+      #
+      # Set concurrency to a specific number to control the number of Proxy worker threads.
+      # If set to 0 (default), then start worker thread for each CPU thread/core.
+      concurrency: {{ .Values.global.proxy.concurrency }}
 
     {{- if .Values.global.remoteZipkinAddress }}
       #
@@ -94,9 +98,9 @@ data:
       #
       # Address where istio Pilot service is running
       {{- if .Values.global.remotePilotCreateSvcEndpoint }}
-      discoveryAddress: {{ $defPilotHostname }}:15005
+      discoveryAddress: {{ $defPilotHostname }}:15011
       {{- else }}
-      discoveryAddress: {{ $pilotAddress }}:15005
+      discoveryAddress: {{ $pilotAddress }}:15011
       {{- end }}
     {{- else }}
       #
@@ -105,8 +109,8 @@ data:
       #
       # Address where istio Pilot service is running
       {{- if .Values.global.remotePilotCreateSvcEndpoint }}
-      discoveryAddress: {{ $defPilotHostname }}:15007
+      discoveryAddress: {{ $defPilotHostname }}:15010
       {{- else }}
-      discoveryAddress: {{ $pilotAddress }}:15007
+      discoveryAddress: {{ $pilotAddress }}:15010
       {{- end }}
     {{- end }}

@@ -1,0 +1,16 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: citactl
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: citactl
+        version: v1
+    spec:
+      containers:
+      - image: gcr.io/jianfeih-test/citactl:latest
+        imagePullPolicy: Always
+        name: citactl

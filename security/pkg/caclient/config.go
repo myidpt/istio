@@ -16,6 +16,8 @@ package caclient
 
 import (
 	"time"
+
+	"istio.io/istio/security/pkg/pki/util"
 )
 
 // Config is configuration for the CA client.
@@ -62,4 +64,7 @@ type Config struct {
 
 	// RootCertFile defines the root cert of the CA client.
 	RootCertFile string
+
+	// SubjectFormat specifies where and how we stores the certificate subject.
+	SubjectFormat util.SubjectFormat
 }

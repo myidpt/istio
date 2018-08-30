@@ -87,6 +87,10 @@ var (
 			role.Type = model.Sidecar
 			if len(args) > 0 {
 				role.Type = model.NodeType(args[0])
+				if !model.IsApplicationNodeType(role.Type) {
+					log.Errorf("Invalid role Type: %#v", role.Type)
+					return fmt.Errorf("Invalid role Type: " + string(role.Type))
+				}
 			}
 
 			// set values from registry platform
@@ -168,7 +172,7 @@ var (
 						// only support the default config, or env variable
 						ns = os.Getenv("ISTIO_NAMESPACE")
 						if ns == "" {
-							ns = "istio-system"
+							ns = model.IstioSystemNamespace
 						}
 					}
 				}
@@ -245,8 +249,10 @@ var (
 
 			envoyProxy := envoy.NewProxy(proxyConfig, role.ServiceNode(), proxyLogLevel, pilotSAN)
 			agent := proxy.NewAgent(envoyProxy, proxy.DefaultRetry)
-			watcher := envoy.NewWatcher(proxyConfig, agent, role, certs, pilotSAN)
+			watcher := envoy.NewWatcher(proxyConfig, role, certs, pilotSAN, agent.ConfigCh())
+
 			ctx, cancel := context.WithCancel(context.Background())
+			go agent.Run(ctx)
 			go watcher.Run(ctx)
 
 			stop := make(chan struct{})

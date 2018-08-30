@@ -270,6 +270,22 @@ func TestGenCertKeyFromOptions(t *testing.T) {
 				CommonName:  "a", // only first host used for CN
 			},
 		},
+		{
+			name: "Put Host in Subject.CommonName field",
+			certOptions: CertOptions{
+				Host:          "common-dns.com",
+				SubjectFormat: CommonName,
+				TTL:           ttl,
+				SignerCert:    caCert,
+				SignerPriv:    caPriv,
+				RSAKeySize:    512,
+			},
+			verifyFields: &VerifyFields{
+				SubjectFormat: CommonName,
+				KeyUsage:      x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+				CommonName:    "common-dns.com",
+			},
+		},
 	}
 
 	for _, c := range cases {
@@ -300,7 +316,7 @@ func TestGenCertFromCSR(t *testing.T) {
 		SignatureAlgorithm:    x509.SHA256WithRSA,
 		KeyUsage:              x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
-		IsCA: true,
+		IsCA:                  true,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, caTmpl, caTmpl, &caPK.PublicKey, caPK)
 	if err != nil {

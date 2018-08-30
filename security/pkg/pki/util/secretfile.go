@@ -46,13 +46,13 @@ type SecretFile struct {
 	RootDir string
 }
 
-// Put writes the specified key and cert to the files.
-func (sf *SecretFile) Put(keycert KeyCertBundle) error {
-	return sf.PutWithServiceAccount("", keycert)
+// PutSigningKeyCert writes the specified key and cert to the files.
+func (sf *SecretFile) PutSigningKeyCert(keycert KeyCertBundle) error {
+	return sf.Put("", keycert)
 }
 
-// PutWithServiceAccount writes the specified key and cert to the files correspond to the service account.
-func (sf *SecretFile) PutWithServiceAccount(serviceAccount string, keycert KeyCertBundle) error {
+// Put writes the specified key and cert to the files correspond to the service account.
+func (sf *SecretFile) Put(serviceAccount string, keycert KeyCertBundle) error {
 	cert, priv, certchain, root := keycert.GetAllPem()
 	dir := sf.RootDir
 	if len(serviceAccount) != 0 {
@@ -90,8 +90,8 @@ func (sf *SecretFile) PutWithServiceAccount(serviceAccount string, keycert KeyCe
 	return nil
 }
 
-// Get reads the key and cert from specific files.
-func (sf *SecretFile) Get() (keycert KeyCertBundle, err error) {
+// GetSigningKeyCert reads the key and cert from specific files.
+func (sf *SecretFile) GetSigningKeyCert() (keycert KeyCertBundle, err error) {
 	return NewVerifiedKeyCertBundleFromFile(
 		path.Join(sf.RootDir, CertFileName), path.Join(sf.RootDir, KeyFileName),
 		path.Join(sf.RootDir, CertChainFileName), path.Join(sf.RootDir, RootCertFileName))

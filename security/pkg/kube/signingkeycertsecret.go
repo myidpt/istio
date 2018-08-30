@@ -40,8 +40,8 @@ type SigningKeyCertSecret struct {
 	Namespace string
 }
 
-// Get returns the private key and cert from k8s secret.
-func (s *SigningKeyCertSecret) Get() (keycert util.KeyCertBundle, err error) {
+// GetSigningKeyCert returns the private key and cert from k8s secret.
+func (s *SigningKeyCertSecret) GetSigningKeyCert() (keycert util.KeyCertBundle, err error) {
 	caSecret, scrtErr := s.Core.Secrets(s.Namespace).Get(CitadelSecretName, metav1.GetOptions{})
 	if scrtErr != nil {
 		return nil, scrtErr
@@ -50,8 +50,8 @@ func (s *SigningKeyCertSecret) Get() (keycert util.KeyCertBundle, err error) {
 		caSecret.Data[SigningCertID], caSecret.Data[SigningKeyID], nil, caSecret.Data[SigningCertID])
 }
 
-// Put updates the cert and private key in k8s secret.
-func (s *SigningKeyCertSecret) Put(keycert util.KeyCertBundle) (err error) {
+// PutSigningKeyCert updates the cert and private key in k8s secret.
+func (s *SigningKeyCertSecret) PutSigningKeyCert(keycert util.KeyCertBundle) (err error) {
 	pemCert, pemKey, _, _ := keycert.GetAllPem()
 	secret := &apiv1.Secret{
 		Data: map[string][]byte{

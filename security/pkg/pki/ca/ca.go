@@ -49,10 +49,10 @@ type CertificateAuthority interface {
 
 // SigningKeyCertStorage is the storage for storing Citadel signing key and cert.
 type SigningKeyCertStorage interface {
-	// Get returns the key and cert for Citadel in bytes
-	Get() (keycert util.KeyCertBundle, err error)
-	// Put updates the key and cert for Citadel in bytes
-	Put(keycert util.KeyCertBundle) (err error)
+	// GetSigningKeyCert returns the key and cert for Citadel in bytes
+	GetSigningKeyCert() (keycert util.KeyCertBundle, err error)
+	// PutSigningKeyCert updates the key and cert for Citadel in bytes
+	PutSigningKeyCert(keycert util.KeyCertBundle) (err error)
 }
 
 // IstioCAOptions holds the configurations for creating an Istio CA.
@@ -90,7 +90,7 @@ func NewSelfSignedIstioCAOptions(caCertTTL, certTTL, maxCertTTL time.Duration, o
 		MaxCertTTL: maxCertTTL,
 	}
 
-	keycert, sErr := storage.Get()
+	keycert, sErr := storage.GetSigningKeyCert()
 	if sErr != nil {
 		log.Infof("Failed to get secret (error: %s), will create one", sErr)
 		options := util.CertOptions{
@@ -110,7 +110,7 @@ func NewSelfSignedIstioCAOptions(caCertTTL, certTTL, maxCertTTL time.Duration, o
 		if bErr != nil {
 			return nil, fmt.Errorf("Failed to convert signing key and cert to KeyCertBundle (%v)", bErr)
 		}
-		if err = storage.Put(keycert); err != nil {
+		if err = storage.PutSigningKeyCert(keycert); err != nil {
 			log.Errorf("Failed to write secret to CA (error: %s). This CA will not persist when restart.", err)
 		}
 	}

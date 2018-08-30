@@ -15,6 +15,7 @@
 package util
 
 import (
+	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"fmt"
@@ -25,6 +26,16 @@ import (
 // IdentityType represents type of an identity. This is used to properly encode
 // an identity into a SAN extension.
 type IdentityType int
+
+// SubjectFormat decides how we stores the subject in the certificate.
+type SubjectFormat string
+
+const (
+	DNSSan     SubjectFormat = "dns-san"
+	IPSan      SubjectFormat = "ip-san"
+	URISan     SubjectFormat = "uri-san"
+	CommonName SubjectFormat = "common-name"
+)
 
 const (
 	// URIScheme is the URI scheme for Istio identities.
@@ -73,6 +84,19 @@ var (
 type Identity struct {
 	Type  IdentityType
 	Value []byte
+}
+
+// LookupSANType returns corresponding IdentityType given a string.
+// TODO(incfly): redefine IdentityType as type string to avoid the need of this.
+func LookupSANType(name string) (IdentityType, error) {
+	switch name {
+	case "dnsname":
+		return TypeDNS, nil
+	case "spiffe":
+		return TypeURI, nil
+	default:
+		return TypeDNS, fmt.Errorf("not supported identity type %v", name)
+	}
 }
 
 // BuildSubjectAltNameExtension builds the SAN extension for the certificate.
@@ -193,6 +217,36 @@ func ExtractIDs(exts []pkix.Extension) ([]string, error) {
 		ids = append(ids, string(id.Value))
 	}
 	return ids, nil
+}
+
+// ExtractIDFromCert returns the specified type of the subject from the certificate.
+func ExtractIDFromCert(cert *x509.Certificate, format SubjectFormat) (string, error) {
+	if format == CommonName {
+		return cert.Subject.CommonName, nil
+	}
+
+	sanExt := ExtractSANExtension(cert.Extensions)
+	if sanExt == nil {
+		return "", fmt.Errorf("the SAN extension does not exist")
+	}
+
+	idsWithType, err := ExtractIDsFromSAN(sanExt)
+	if err != nil {
+		return "", fmt.Errorf("failed to extract identities from SAN extension (error %v)", err)
+	}
+	for _, id := range idsWithType {
+		if format == DNSSan && id.Type == TypeDNS {
+			return string(id.Value), nil
+		}
+		if format == IPSan && id.Type == TypeIP {
+			return string(id.Value), nil
+		}
+		if format == URISan && id.Type == TypeURI {
+			return string(id.Value), nil
+		}
+	}
+
+	return "", fmt.Errorf("failed to find specified subject in the certifcate")
 }
 
 // GenSanURI returns the formatted uri(SPIFFEE format for now) for the certificate.

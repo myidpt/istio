@@ -33,6 +33,8 @@ type VerifyFields struct {
 	IsCA        bool
 	Org         string
 	CommonName  string
+	// TODO(incfly): support this align with how we generate cert, and remove CommonName field above.
+	SubjectFormat SubjectFormat
 }
 
 // VerifyCertificate verifies a given PEM encoded certificate by

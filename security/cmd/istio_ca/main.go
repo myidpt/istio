@@ -23,7 +23,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/cobra/doc"
 	"k8s.io/client-go/kubernetes"
-	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
@@ -35,6 +34,7 @@ import (
 	"istio.io/istio/security/pkg/caclient"
 	"istio.io/istio/security/pkg/caclient/protocol"
 	"istio.io/istio/security/pkg/cmd"
+	pkgkube "istio.io/istio/security/pkg/kube"
 	"istio.io/istio/security/pkg/pki/ca"
 	"istio.io/istio/security/pkg/pki/ca/controller"
 	pkiutil "istio.io/istio/security/pkg/pki/util"
@@ -103,6 +103,11 @@ type cliOptions struct { // nolint: maligned
 	workloadCertGracePeriodRatio float32
 	// The minimum grace period for workload cert rotation.
 	workloadCertMinGracePeriod time.Duration
+
+	// Whether Citadel is in standalone mode. If so, it does not interact with Kubernetes apiserver.
+	standalone bool
+	// The directory name for Citadel to store the key and certs on the local VM. Valid only when standalone is true.
+	secretDir string
 
 	// TODO(incfly): delete this field once we deprecate flag --grpc-hostname.
 	grpcHostname string
@@ -223,6 +228,11 @@ func init() {
 	flags.DurationVar(&opts.workloadCertMinGracePeriod, "workload-cert-min-grace-period",
 		defaultWorkloadMinCertGracePeriod, "The minimum workload certificate rotation grace period.")
 
+	flags.BoolVar(&opts.standalone, "standalone", false, "Whether Citadel is in standalone mode. "+
+		"If so, it does not interact with Kubernetes apiserver.")
+	flags.StringVar(&opts.secretDir, "secret-dir", "/etc/istio/citadel",
+		"The directory name to store Citadel key and certs on the local VM. Valid only in standalone mode.")
+
 	// gRPC server for signing CSRs.
 	flags.StringVar(&opts.grpcHosts, "grpc-host-identities", "istio-ca,istio-citadel",
 		"The list of hostnames for istio ca server, separated by comma.")
@@ -330,19 +340,26 @@ func runCA() {
 		}
 	}
 
-	cs := createClientset()
-	ca := createCA(cs.CoreV1())
-	// For workloads in K8s, we apply the configured workload cert TTL.
-	sc, err := controller.NewSecretController(ca,
-		opts.workloadCertTTL, opts.identityDomain,
-		opts.workloadCertGracePeriodRatio, opts.workloadCertMinGracePeriod, opts.dualUse,
-		cs.CoreV1(), opts.signCACerts, opts.listenedNamespace, webhooks)
-	if err != nil {
-		fatalf("Failed to create secret controller: %v", err)
+	if opts.standalone && opts.grpcPort <= 0 {
+		fatalf("Citadel in standalone mode must expose the service by specifying a positive gRPC port number")
 	}
 
-	stopCh := make(chan struct{})
-	sc.Run(stopCh)
+	cA := createCA(opts.standalone)
+
+	if !opts.standalone {
+		cs := createClientset()
+		// For workloads in K8s, we apply the configured workload cert TTL.
+		sc, err := controller.NewSecretController(cA,
+			opts.workloadCertTTL, opts.identityDomain,
+			opts.workloadCertGracePeriodRatio, opts.workloadCertMinGracePeriod, opts.dualUse,
+			cs.CoreV1(), opts.signCACerts, opts.listenedNamespace, webhooks)
+		if err != nil {
+			fatalf("Failed to create secret controller: %v", err)
+		}
+
+		stopCh := make(chan struct{})
+		sc.Run(stopCh)
+	}
 
 	if opts.grpcPort > 0 {
 		// start registry if gRPC server is to be started
@@ -351,29 +368,32 @@ func runCA() {
 		// add certificate identity to the identity registry for the liveness probe check
 		if registryErr := reg.AddMapping(probecontroller.LivenessProbeClientIdentity,
 			probecontroller.LivenessProbeClientIdentity); registryErr != nil {
-			log.Errorf("Failed to add indentity mapping: %v", registryErr)
+			log.Errorf("Failed to add identity mapping: %v", registryErr)
 		}
 
 		ch := make(chan struct{})
 
-		// monitor service objects with "alpha.istio.io/kubernetes-serviceaccounts" annotation
-		serviceController := kube.NewServiceController(cs.CoreV1(), opts.listenedNamespace, reg)
-		serviceController.Run(ch)
-
-		// monitor service account objects for istio mesh expansion
-		serviceAccountController := kube.NewServiceAccountController(cs.CoreV1(), opts.listenedNamespace, reg)
-		serviceAccountController.Run(ch)
+		if !opts.standalone {
+			cs := createClientset()
+			// monitor service objects with "alpha.istio.io/kubernetes-serviceaccounts" annotation
+			serviceController := kube.NewServiceController(cs.CoreV1(), opts.listenedNamespace, reg)
+			serviceController.Run(ch)
+			// monitor service account objects for istio mesh expansion
+			serviceAccountController := kube.NewServiceAccountController(cs.CoreV1(), opts.listenedNamespace, reg)
+			serviceAccountController.Run(ch)
+		}
 
 		// The CA API uses cert with the max workload cert TTL.
 		hostnames := append(strings.Split(opts.grpcHosts, ","), fqdn())
-		caServer, startErr := caserver.New(ca, opts.maxWorkloadCertTTL, opts.signCACerts, hostnames, opts.grpcPort)
+		cAServer, startErr := caserver.New(cA, opts.maxWorkloadCertTTL, opts.signCACerts, hostnames, opts.grpcPort)
 		if startErr != nil {
 			fatalf("Failed to create istio ca server: %v", startErr)
 		}
-		if serverErr := caServer.Run(); serverErr != nil {
-			// stop the registry-related controllers
-			ch <- struct{}{}
-
+		if serverErr := cAServer.Run(); serverErr != nil {
+			if !opts.standalone {
+				// stop the registry-related controllers
+				ch <- struct{}{}
+			}
 			log.Warnf("Failed to start GRPC server with error: %v", serverErr)
 		}
 	}
@@ -395,7 +415,7 @@ func runCA() {
 	rotatorErrCh := make(chan error)
 	// Start CA client if the upstream CA address is specified.
 	if len(opts.cAClientConfig.CAAddress) != 0 {
-		rotator, creationErr := createKeyCertBundleRotator(ca.GetCAKeyCertBundle())
+		rotator, creationErr := createKeyCertBundleRotator(cA.GetCAKeyCertBundle())
 		if creationErr != nil {
 			fatalf("Failed to create key cert bundle rotator: %v", creationErr)
 		}
@@ -407,9 +427,9 @@ func runCA() {
 	// Blocking until receives error.
 	for {
 		select {
-		case <-monitorErrCh:
+		case err := <-monitorErrCh:
 			fatalf("Monitoring server error: %v", err)
-		case <-rotatorErrCh:
+		case err := <-rotatorErrCh:
 			fatalf("Key cert bundle rotator error: %v", err)
 		}
 	}
@@ -424,15 +444,30 @@ func createClientset() *kubernetes.Clientset {
 	return cs
 }
 
-func createCA(core corev1.SecretsGetter) *ca.IstioCA {
+// TODO(myidpt): Move this function to pkg/pki/ca/ca.go.
+func cretateSigningKeyCertStorage(standalone bool) ca.SigningKeyCertStorage {
+	if !standalone {
+		return &pkgkube.SigningKeyCertSecret{
+			Core:      createClientset().CoreV1(),
+			Namespace: opts.istioCaStorageNamespace,
+		}
+	}
+	return &pkiutil.SecretFile{
+		RootDir: opts.secretDir,
+	}
+}
+
+// TODO(myidpt): Move this function to pkg/pki/ca/ca.go.
+func createCA(standalone bool) *ca.IstioCA {
 	var caOpts *ca.IstioCAOptions
 	var err error
+
+	storage := cretateSigningKeyCertStorage(standalone)
 
 	if opts.selfSignedCA {
 		log.Info("Use self-signed certificate as the CA certificate")
 		caOpts, err = ca.NewSelfSignedIstioCAOptions(opts.selfSignedCACertTTL, opts.workloadCertTTL,
-			opts.maxWorkloadCertTTL, opts.identityDomain, opts.dualUse,
-			opts.istioCaStorageNamespace, core)
+			opts.maxWorkloadCertTTL, opts.identityDomain, opts.dualUse, storage)
 		if err != nil {
 			fatalf("Failed to create a self-signed Citadel (error: %v)", err)
 		}

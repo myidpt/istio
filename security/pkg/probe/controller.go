@@ -33,7 +33,7 @@ import (
 
 const (
 	// LivenessProbeClientIdentity is the default identity for the liveness probe check
-	LivenessProbeClientIdentity   = "k8s.cluster.local"
+	LivenessProbeClientIdentity   = "citadelprobe.cluster.local"
 	probeCheckRequestedTTLMinutes = 60
 )
 

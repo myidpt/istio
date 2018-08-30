@@ -77,7 +77,7 @@ func NewVerifiedKeyCertBundleFromPem(certBytes, privKeyBytes, certChainBytes, ro
 }
 
 // NewVerifiedKeyCertBundleFromFile returns a new KeyCertBundle, or error if if the provided certs failed the
-// verification.
+// verification. The certchain file is optional.
 func NewVerifiedKeyCertBundleFromFile(certFile, privKeyFile, certChainFile, rootCertFile string) (
 	*KeyCertBundleImpl, error) {
 	certBytes, err := ioutil.ReadFile(certFile)
@@ -90,9 +90,7 @@ func NewVerifiedKeyCertBundleFromFile(certFile, privKeyFile, certChainFile, root
 	}
 	certChainBytes := []byte{}
 	if len(certChainFile) != 0 {
-		if certChainBytes, err = ioutil.ReadFile(certChainFile); err != nil {
-			return nil, err
-		}
+		certChainBytes, _ = ioutil.ReadFile(certChainFile)
 	}
 	rootCertBytes, err := ioutil.ReadFile(rootCertFile)
 	if err != nil {

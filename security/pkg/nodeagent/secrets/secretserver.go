@@ -32,8 +32,8 @@ type SecretServerMode int
 
 // SecretServer is for implementing the communication from the node agent to the workload.
 type SecretServer interface {
-	// Put stores the key cert bundle with associated workload identity.
-	Put(serviceAccount string, bundle util.KeyCertBundle) error
+	// PutWithServiceAccount stores the key cert bundle with associated workload identity.
+	PutWithServiceAccount(serviceAccount string, bundle util.KeyCertBundle) error
 }
 
 // Config contains the SecretServer configuration.
@@ -49,7 +49,7 @@ type Config struct {
 func NewSecretServer(cfg *Config) (SecretServer, error) {
 	switch cfg.Mode {
 	case SecretFile:
-		return &SecretFileServer{cfg.SecretDirectory}, nil
+		return &util.SecretFile{cfg.SecretDirectory}, nil
 	case SecretDiscoveryServiceAPI:
 		return &SDSServer{}, nil
 	default:

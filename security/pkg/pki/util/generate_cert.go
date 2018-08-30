@@ -226,10 +226,9 @@ func genCertTemplateFromOptions(options CertOptions) (*x509.Certificate, error) 
 		BasicConstraintsValid: true,
 	}
 
-	// TODO: should we consider this an error?
 	h := options.Host
 	if len(h) == 0 {
-		return cert, nil
+		return nil, fmt.Errorf("host must be non empty")
 	}
 	// Only common name case.
 	if options.SubjectFormat == CommonName {

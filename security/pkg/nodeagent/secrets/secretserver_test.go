@@ -73,7 +73,7 @@ func TestNewSecretServer_FileMode(t *testing.T) {
 	}
 	for _, host := range hosts {
 		b := bundleMap[host]
-		if err := ss.PutWithServiceAccount(host, b); err != nil {
+		if err := ss.Put(host, b); err != nil {
 			t.Errorf("failed to save secret for %v, err %v", host, err)
 		}
 	}

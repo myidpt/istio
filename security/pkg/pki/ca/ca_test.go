@@ -92,14 +92,14 @@ type FakeSigningKeyCertStorage struct {
 	GetErr error
 }
 
-// Put returns PutErr.
-func (s *FakeSigningKeyCertStorage) Put(keycert util.KeyCertBundle) (err error) {
+// PutSigningKeyCert returns PutErr.
+func (s *FakeSigningKeyCertStorage) PutSigningKeyCert(keycert util.KeyCertBundle) (err error) {
 	s.PutKeyCert = keycert
 	return s.PutErr
 }
 
-// Get returns KeyCertBundle and GetErr.
-func (s *FakeSigningKeyCertStorage) Get() (keycert util.KeyCertBundle, err error) {
+// GetSigningKeyCert returns KeyCertBundle and GetErr.
+func (s *FakeSigningKeyCertStorage) GetSigningKeyCert() (keycert util.KeyCertBundle, err error) {
 	return s.GetKeyCert, s.GetErr
 }
 

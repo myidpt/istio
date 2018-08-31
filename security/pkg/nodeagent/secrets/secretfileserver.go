@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package util
+package secrets
 
 import (
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
+
+	"istio.io/istio/security/pkg/pki/util"
 )
 
 const (
@@ -41,18 +43,18 @@ const (
 	RootCertFileName = "root-cert.pem"
 )
 
-// SecretFile facilitates the access to key and certs in the file system.
-type SecretFile struct {
+// SecretFileServer facilitates the access to key and certs in the file system.
+type SecretFileServer struct {
 	RootDir string
 }
 
 // PutSigningKeyCert writes the specified key and cert to the files.
-func (sf *SecretFile) PutSigningKeyCert(keycert KeyCertBundle) error {
+func (sf *SecretFileServer) PutSigningKeyCert(keycert util.KeyCertBundle) error {
 	return sf.Put("", keycert)
 }
 
 // Put writes the specified key and cert to the files correspond to the service account.
-func (sf *SecretFile) Put(serviceAccount string, keycert KeyCertBundle) error {
+func (sf *SecretFileServer) Put(serviceAccount string, keycert util.KeyCertBundle) error {
 	cert, priv, certchain, root := keycert.GetAllPem()
 	dir := sf.RootDir
 	if len(serviceAccount) != 0 {
@@ -91,8 +93,8 @@ func (sf *SecretFile) Put(serviceAccount string, keycert KeyCertBundle) error {
 }
 
 // GetSigningKeyCert reads the key and cert from specific files.
-func (sf *SecretFile) GetSigningKeyCert() (keycert KeyCertBundle, err error) {
-	return NewVerifiedKeyCertBundleFromFile(
+func (sf *SecretFileServer) GetSigningKeyCert() (keycert util.KeyCertBundle, err error) {
+	return util.NewVerifiedKeyCertBundleFromFile(
 		path.Join(sf.RootDir, CertFileName), path.Join(sf.RootDir, KeyFileName),
 		path.Join(sf.RootDir, CertChainFileName), path.Join(sf.RootDir, RootCertFileName))
 }

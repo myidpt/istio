@@ -90,8 +90,8 @@ func (s *SDSServer) SetServiceIdentityPrivateKey(content []byte) error {
 	return nil
 }
 
-// PutWithServiceAccount stores the KeyCertBundle for a specific service account.
-func (s *SDSServer) PutWithServiceAccount(serviceAccount string, b util.KeyCertBundle) error {
+// Put stores the KeyCertBundle for a specific service account.
+func (s *SDSServer) Put(serviceAccount string, b util.KeyCertBundle) error {
 	return nil
 }
 

@@ -29,30 +29,72 @@ const (
 
 	// CertFilePermission is the permission bits for certificate file.
 	CertFilePermission = 0644
+
+	// CertFileName is the file name to store the certificate.
+	CertFileName = "cert.pem"
+
+	// KeyFileName is the file name to store the key.
+	KeyFileName = "key.pem"
+
+	// CertChainFileName is the file name to store the cert chain.
+	CertChainFileName = "cert-chain.pem"
+
+	// RootCertFileName is the file name to store the root cert.
+	RootCertFileName = "root-cert.pem"
 )
 
-// SecretFileServer is an implementation of SecretServer that writes the key/cert into file system.
+// SecretFileServer facilitates the access to key and certs in the file system.
 type SecretFileServer struct {
-	rootDir string
+	RootDir string
 }
 
-// Put writes the specified key and cert to the files.
+// PutSigningKeyCert writes the specified key and cert to the files.
+func (sf *SecretFileServer) PutSigningKeyCert(keycert util.KeyCertBundle) error {
+	return sf.Put("", keycert)
+}
+
+// Put writes the specified key and cert to the files correspond to the service account.
 func (sf *SecretFileServer) Put(serviceAccount string, keycert util.KeyCertBundle) error {
-	_, priv, cert, root := keycert.GetAllPem()
-	dir := path.Join(sf.rootDir, serviceAccount)
+	cert, priv, certchain, root := keycert.GetAllPem()
+	dir := sf.RootDir
+	if len(serviceAccount) != 0 {
+		dir = path.Join(sf.RootDir, serviceAccount)
+	}
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		if err := os.Mkdir(dir, 0700); err != nil {
 			return fmt.Errorf("failed to create directory for %v, err %v", serviceAccount, err)
 		}
 	}
-	kpath := path.Join(dir, "key.pem")
-	if err := ioutil.WriteFile(kpath, priv, KeyFilePermission); err != nil {
-		return err
+	if len(cert) != 0 {
+		cpath := path.Join(dir, CertFileName)
+		if err := ioutil.WriteFile(cpath, cert, CertFilePermission); err != nil {
+			return err
+		}
 	}
-	cpath := path.Join(dir, "cert-chain.pem")
-	if err := ioutil.WriteFile(cpath, cert, CertFilePermission); err != nil {
-		return err
+	if len(priv) != 0 {
+		kpath := path.Join(dir, KeyFileName)
+		if err := ioutil.WriteFile(kpath, priv, KeyFilePermission); err != nil {
+			return err
+		}
 	}
-	rpath := path.Join(dir, "root-cert.pem")
-	return ioutil.WriteFile(rpath, root, CertFilePermission)
+	if len(certchain) != 0 {
+		ccpath := path.Join(dir, CertChainFileName)
+		if err := ioutil.WriteFile(ccpath, certchain, CertFilePermission); err != nil {
+			return err
+		}
+	}
+	if len(root) != 0 {
+		rpath := path.Join(dir, RootCertFileName)
+		if err := ioutil.WriteFile(rpath, root, CertFilePermission); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetSigningKeyCert reads the key and cert from specific files.
+func (sf *SecretFileServer) GetSigningKeyCert() (keycert util.KeyCertBundle, err error) {
+	return util.NewVerifiedKeyCertBundleFromFile(
+		path.Join(sf.RootDir, CertFileName), path.Join(sf.RootDir, KeyFileName),
+		path.Join(sf.RootDir, CertChainFileName), path.Join(sf.RootDir, RootCertFileName))
 }

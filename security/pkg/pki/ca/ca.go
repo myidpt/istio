@@ -19,26 +19,12 @@ import (
 	"fmt"
 	"time"
 
-	apiv1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-
 	"istio.io/istio/pkg/log"
 	"istio.io/istio/pkg/probe"
 	"istio.io/istio/security/pkg/pki/util"
 )
 
 const (
-	// istioCASecretType is the Istio secret annotation type.
-	istioCASecretType = "istio.io/ca-root"
-
-	// cACertChainID is the CA certificate chain file.
-	cACertID = "ca-cert.pem"
-	// cAPrivateKeyID is the private key file of CA.
-	cAPrivateKeyID = "ca-key.pem"
-	// cASecret stores the key/cert of self-signed CA for persistency purpose.
-	cASecret = "istio-ca-secret"
-
 	// The size of a private key for a self-signed Istio CA.
 	caKeySize = 2048
 )
@@ -59,6 +45,14 @@ type CertificateAuthority interface {
 	Sign(csrPEM []byte, ttl time.Duration, forCA bool) ([]byte, error)
 	// GetCAKeyCertBundle returns the KeyCertBundle used by CA.
 	GetCAKeyCertBundle() util.KeyCertBundle
+}
+
+// SigningKeyCertStorage is the storage for storing Citadel signing key and cert.
+type SigningKeyCertStorage interface {
+	// GetSigningKeyCert returns the key and cert for Citadel in bytes
+	GetSigningKeyCert() (keycert util.KeyCertBundle, err error)
+	// PutSigningKeyCert updates the key and cert for Citadel in bytes
+	PutSigningKeyCert(keycert util.KeyCertBundle) (err error)
 }
 
 // IstioCAOptions holds the configurations for creating an Istio CA.
@@ -87,18 +81,18 @@ type IstioCA struct {
 
 // NewSelfSignedIstioCAOptions returns a new IstioCAOptions instance using self-signed certificate.
 func NewSelfSignedIstioCAOptions(caCertTTL, certTTL, maxCertTTL time.Duration, org string, dualUse bool,
-	namespace string, core corev1.SecretsGetter) (caOpts *IstioCAOptions, err error) {
+	storage SigningKeyCertStorage) (caOpts *IstioCAOptions, err error) {
 	// For the first time the CA is up, it generates a self-signed key/cert pair and write it to
-	// cASecret. For subsequent restart, CA will reads key/cert from cASecret.
-	caSecret, scrtErr := core.Secrets(namespace).Get(cASecret, metav1.GetOptions{})
+	// storage. For subsequent restart, CA will reads key/cert from storage.
 	caOpts = &IstioCAOptions{
 		CAType:     selfSignedCA,
 		CertTTL:    certTTL,
 		MaxCertTTL: maxCertTTL,
 	}
-	if scrtErr != nil {
-		log.Infof("Failed to get secret (error: %s), will create one", scrtErr)
 
+	keycert, sErr := storage.GetSigningKeyCert()
+	if sErr != nil {
+		log.Infof("Failed to get secret (error: %s), will create one", sErr)
 		options := util.CertOptions{
 			TTL:          caCertTTL,
 			Org:          org,
@@ -107,36 +101,21 @@ func NewSelfSignedIstioCAOptions(caCertTTL, certTTL, maxCertTTL time.Duration, o
 			RSAKeySize:   caKeySize,
 			IsDualUse:    dualUse,
 		}
-		pemCert, pemKey, ckErr := util.GenCertKeyFromOptions(options)
-		if ckErr != nil {
-			return nil, fmt.Errorf("unable to generate CA cert and key for self-signed CA (%v)", ckErr)
+		pemCert, pemKey, gErr := util.GenCertKeyFromOptions(options)
+		if gErr != nil {
+			return nil, fmt.Errorf("unable to generate CA cert and key for self-signed CA (%v)", gErr)
 		}
-
-		if caOpts.KeyCertBundle, err = util.NewVerifiedKeyCertBundleFromPem(pemCert, pemKey, nil, pemCert); err != nil {
-			return nil, fmt.Errorf("failed to create CA KeyCertBundle (%v)", err)
+		var bErr error
+		keycert, bErr = util.NewVerifiedKeyCertBundleFromPem(pemCert, pemKey, nil, pemCert)
+		if bErr != nil {
+			return nil, fmt.Errorf("Failed to convert signing key and cert to KeyCertBundle (%v)", bErr)
 		}
-
-		// Rewrite the key/cert back to secret so they will be persistent when CA restarts.
-		secret := &apiv1.Secret{
-			Data: map[string][]byte{
-				cACertID:       pemCert,
-				cAPrivateKeyID: pemKey,
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      cASecret,
-				Namespace: namespace,
-			},
-			Type: istioCASecretType,
-		}
-		if _, err = core.Secrets(namespace).Create(secret); err != nil {
+		if err = storage.PutSigningKeyCert(keycert); err != nil {
 			log.Errorf("Failed to write secret to CA (error: %s). This CA will not persist when restart.", err)
 		}
-	} else {
-		if caOpts.KeyCertBundle, err = util.NewVerifiedKeyCertBundleFromPem(caSecret.Data[cACertID],
-			caSecret.Data[cAPrivateKeyID], nil, caSecret.Data[cACertID]); err != nil {
-			return nil, fmt.Errorf("failed to create CA KeyCertBundle (%v)", err)
-		}
 	}
+
+	caOpts.KeyCertBundle = keycert
 
 	return caOpts, nil
 }
@@ -158,6 +137,9 @@ func NewPluggedCertIstioCAOptions(certChainFile, signingCertFile, signingKeyFile
 
 // NewIstioCA returns a new IstioCA instance.
 func NewIstioCA(opts *IstioCAOptions) (*IstioCA, error) {
+	if opts.KeyCertBundle == nil {
+		return nil, fmt.Errorf("failed to create Istio CA because KeyCertBundle is nil")
+	}
 	ca := &IstioCA{
 		certTTL:       opts.CertTTL,
 		maxCertTTL:    opts.MaxCertTTL,

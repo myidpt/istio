@@ -17,15 +17,13 @@ package ca
 import (
 	"bytes"
 	"crypto/x509"
+	"fmt"
 	"io/ioutil"
 	"reflect"
 	"testing"
 	"time"
 
-	"k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes/fake"
-
+	"istio.io/istio/pkg/log"
 	"istio.io/istio/security/pkg/pki/util"
 )
 
@@ -82,17 +80,42 @@ YQTFeoqvepyHWE9e1Mb5dGFHMvXywZQR0hR2rpWxA2OgNaRhqL7Rh7th+V/owIi9
 
 // TODO (myidpt): Test Istio CA can load plugin key/certs from secret.
 
+// FakeSigningKeyCertStorage is a mock of SigningKeyCertStorage.
+type FakeSigningKeyCertStorage struct {
+	// PutKeyCert is the KeyCertBundle given by Put().
+	PutKeyCert util.KeyCertBundle
+	// PutErr is the error returned by Put().
+	PutErr error
+	// GetKeyCert is the KeyCertBundle returned by Get().
+	GetKeyCert util.KeyCertBundle
+	// GetErr is the error returned by Get().
+	GetErr error
+}
+
+// PutSigningKeyCert returns PutErr.
+func (s *FakeSigningKeyCertStorage) PutSigningKeyCert(keycert util.KeyCertBundle) (err error) {
+	s.PutKeyCert = keycert
+	return s.PutErr
+}
+
+// GetSigningKeyCert returns KeyCertBundle and GetErr.
+func (s *FakeSigningKeyCertStorage) GetSigningKeyCert() (keycert util.KeyCertBundle, err error) {
+	return s.GetKeyCert, s.GetErr
+}
+
 func TestCreateSelfSignedIstioCAWithoutSecret(t *testing.T) {
 	caCertTTL := time.Hour
 	defaultCertTTL := 30 * time.Minute
 	maxCertTTL := time.Hour
 	org := "test.ca.org"
 	dualUse := false
-	caNamespace := "default"
-	client := fake.NewSimpleClientset()
 
-	caopts, err := NewSelfSignedIstioCAOptions(caCertTTL, defaultCertTTL, maxCertTTL,
-		org, dualUse, caNamespace, client.CoreV1())
+	storage := &FakeSigningKeyCertStorage{
+		GetKeyCert: nil,
+		GetErr:     fmt.Errorf("no secret"),
+		PutErr:     nil,
+	}
+	caopts, err := NewSelfSignedIstioCAOptions(caCertTTL, defaultCertTTL, maxCertTTL, org, dualUse, storage)
 	if err != nil {
 		t.Fatalf("Failed to create a self-signed CA Options: %v", err)
 	}
@@ -126,18 +149,10 @@ func TestCreateSelfSignedIstioCAWithoutSecret(t *testing.T) {
 	if len(certChainBytes) != 0 {
 		t.Errorf("Cert chain should be empty")
 	}
+	log.Infof("ABC")
 
 	// Check the signing cert stored in K8s secret.
-	caSecret, err := client.CoreV1().Secrets("default").Get(cASecret, metav1.GetOptions{})
-	if err != nil {
-		t.Errorf("Failed to get secret (error: %s)", err)
-	}
-
-	signingCertFromSecret, err := util.ParsePemEncodedCertificate(caSecret.Data[cACertID])
-	if err != nil {
-		t.Errorf("Failed to parse cert (error: %s)", err)
-	}
-
+	signingCertFromSecret, _, _, _ := storage.PutKeyCert.GetAll()
 	if !signingCertFromSecret.Equal(signingCert) {
 		t.Error("CA signing cert does not match the K8s secret")
 	}
@@ -149,22 +164,23 @@ func TestCreateSelfSignedIstioCAWithSecret(t *testing.T) {
 	signingCertPem := cert1Pem
 	signingKeyPem := key1Pem
 
-	client := fake.NewSimpleClientset()
-	initSecret := createSecret("default", signingCertPem, signingKeyPem, rootCertPem)
-	_, err := client.CoreV1().Secrets("default").Create(initSecret)
-	if err != nil {
-		t.Errorf("Failed to create secret (error: %s)", err)
-	}
-
 	caCertTTL := time.Hour
 	certTTL := 30 * time.Minute
 	maxCertTTL := time.Hour
 	org := "test.ca.org"
-	caNamespace := "default"
 	dualUse := false
 
-	caopts, err := NewSelfSignedIstioCAOptions(caCertTTL, certTTL, maxCertTTL,
-		org, dualUse, caNamespace, client.CoreV1())
+	keycert, err := util.NewVerifiedKeyCertBundleFromPem(
+		[]byte(signingCertPem), []byte(signingKeyPem), nil, []byte(rootCertPem))
+	if err != nil {
+		t.Errorf("Failed to create KeyCertBundle (error: %s)", err)
+	}
+	storage := &FakeSigningKeyCertStorage{
+		GetKeyCert: keycert,
+		GetErr:     nil,
+		PutErr:     nil,
+	}
+	caopts, err := NewSelfSignedIstioCAOptions(caCertTTL, certTTL, maxCertTTL, org, dualUse, storage)
 	if err != nil {
 		t.Fatalf("Failed to create a self-signed CA Options: %v", err)
 	}
@@ -425,21 +441,6 @@ func createCA(maxTTL time.Duration, multicluster bool) (*IstioCA, error) {
 	}
 
 	return NewIstioCA(caOpts)
-}
-
-// TODO(wattli): move the two functions below as a util function to share with secret_test.go
-func createSecret(namespace, signingCert, signingKey, rootCert string) *v1.Secret {
-	return &v1.Secret{
-		Data: map[string][]byte{
-			cACertID:       []byte(signingCert),
-			cAPrivateKeyID: []byte(signingKey),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cASecret,
-			Namespace: namespace,
-		},
-		Type: istioCASecretType,
-	}
 }
 
 func comparePem(expectedBytes []byte, file string) bool {

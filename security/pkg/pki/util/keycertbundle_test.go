@@ -215,19 +215,19 @@ func TestNewVerifiedKeyCertBundleFromFile(t *testing.T) {
 			rootCertFile:  rootCertFile,
 			expectedErr:   "",
 		},
-		"Success - 2 level CA without cert chain file": {
+		"Success - 2 level CA with unspecified cert chain file": {
 			caCertFile:    intCertFile,
 			caKeyFile:     intKeyFile,
 			certChainFile: "",
 			rootCertFile:  rootCertFile,
 			expectedErr:   "",
 		},
-		"Failure - invalid cert chain file": {
+		"Success - 2 level CA with specified but non-exist cert chain file": {
 			caCertFile:    intCertFile,
 			caKeyFile:     intKeyFile,
-			certChainFile: "bad.pem",
+			certChainFile: "nonexist.pem",
 			rootCertFile:  rootCertFile,
-			expectedErr:   "open bad.pem: no such file or directory",
+			expectedErr:   "",
 		},
 		"Failure - no root cert file": {
 			caCertFile:    intCertFile,

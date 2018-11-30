@@ -45,7 +45,7 @@ security:
 # nodeagent configuration
 #
 nodeagent:
-  enabled: false
+  enabled: true
 
 #
 # ingress configuration

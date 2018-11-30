@@ -23,7 +23,7 @@ SHELL := /bin/bash
 VERSION ?= 1.0-dev
 
 # locations where artifacts are stored
-ISTIO_DOCKER_HUB ?= docker.io/istio
+ISTIO_DOCKER_HUB ?= docker.io/yonggangl
 export ISTIO_DOCKER_HUB
 ISTIO_GCS ?= istio-release/releases/$(VERSION)
 ISTIO_URL ?= https://storage.googleapis.com/$(ISTIO_GCS)
@@ -179,7 +179,7 @@ export ISTIO_ENVOY_RELEASE_PATH ?= ${ISTIO_ENVOY_RELEASE_DIR}/${ISTIO_ENVOY_RELE
 
 GO_VERSION_REQUIRED:=1.10
 
-HUB?=istio
+HUB?=yonggangl
 ifeq ($(HUB),)
   $(error "HUB cannot be empty")
 endif
@@ -676,7 +676,7 @@ generate_yaml: $(HELM) $(HOME)/.helm helm-repo-add
 		--namespace=istio-system \
 		--set global.hub=${HUB} \
 		--set global.mtls.enabled=true \
-		--set global.controlPlaneSecurityEnabled=true \
+		--set global.controlPlaneSecurityEnabled=false \
 		--set global.proxy.enableCoreDump=${ENABLE_COREDUMP} \
 		--set istio_cni.enabled=${ENABLE_ISTIO_CNI} \
 		${EXTRA_HELM_SETTINGS} \

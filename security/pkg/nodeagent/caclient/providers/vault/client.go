@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/vault/api"
 
@@ -174,9 +175,9 @@ func loginVaultK8sAuthMethod(client *api.Client, loginPath, role, sa string) (st
 // csr: the CSR to be signed, in pem format
 func signCsrByVault(client *api.Client, csrSigningPath string, certTTLInSec int64, csr []byte) ([]string, error) {
 	m := map[string]interface{}{
-		"format":               "pem",
-		"csr":                  string(csr[:]),
-		"ttl":                  strconv.FormatInt(certTTLInSec, 10) + "s",
+		"format": "pem",
+		"csr":    string(csr[:]),
+		"ttl":    strconv.FormatInt(certTTLInSec, 10) + "s",
 		"exclude_cn_from_sans": true,
 	}
 	res, err := client.Logical().Write(csrSigningPath, m)
@@ -224,5 +225,9 @@ func signCsrByVault(client *api.Client, csrSigningPath string, certTTLInSec int6
 		certChain = append(certChain, c.(string))
 	}
 
+	// Trim the "\n"s.
+	for i := range certChain {
+		strings.Replace(certChain[i], "\n", "", -1)
+	}
 	return certChain, nil
 }

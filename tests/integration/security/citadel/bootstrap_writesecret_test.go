@@ -15,6 +15,7 @@
 package citadel
 
 import (
+	"strings"
 	"reflect"
 	"testing"
 	"time"
@@ -25,7 +26,6 @@ import (
 	"istio.io/istio/pkg/test/framework/components/environment/kube"
 	"istio.io/istio/pkg/test/framework/components/namespace"
 	"istio.io/istio/pkg/test/util/file"
-	"istio.io/istio/pkg/test/util/retry"
 	"istio.io/istio/pkg/test/util/tmpl"
 	"istio.io/istio/security/pkg/pki/ca"
 )
@@ -72,14 +72,29 @@ func TestCitadelBootstrapKubernetes(t *testing.T) {
 		// Sleep 30 seconds for the pod deletion and recreation to take effect.
 		time.Sleep(30 * time.Second)
 
-		// Due to the RBAC setting, the restarted Citadel won't be able to read the secret.
-		// It also won't be able to create a CA-root secret because the secret already exists.
-		// Citadel is expected to exit and CA-root to be intact.
-		fetchFn := env.NewSinglePodFetch(ns.Name(), "istio=citadel")
-
-		err = env.WaitUntilPodsAreFailed(fetchFn, retry.Timeout(time.Minute), retry.Delay(time.Second*10))
+		pods, err = env.GetPods(ns.Name(), "istio=citadel")
 		if err != nil {
-			t.Fatal("Without writing to secret, Citadel pod is still up.")
+			t.Fatalf("failed to get Citadel pod")
+		}
+		cl, err := env.Logs(ns.Name(), pods[0].Name, "citadel", false /* previousLog */)
+		pl, err := env.Logs(ns.Name(), pods[0].Name, "citadel", true /* previousLog */)
+		expectedErr := []string{"Failed to write secret to CA", "Failed to create a self-signed Citadel"}
+		if cl != "" && err == nil {
+			if !strings.Contains(cl, expectedErr[0]) {
+				t.Errorf("log does not match, expected %s but got %s", expectedErr[0], cl)
+			}
+			if !strings.Contains(cl, expectedErr[1]) {
+				t.Errorf("log does not match, expected %s but got %s", expectedErr[1], cl)
+			}
+		} else if pl != "" && err == nil {
+			if !strings.Contains(pl, expectedErr[0]) {
+				t.Errorf("log does not match, expected %s but got %s", expectedErr[0], pl)
+			}
+			if !strings.Contains(pl, expectedErr[1]) {
+				t.Errorf("log does not match, expected %s but got %s", expectedErr[1], pl)
+			}
+		} else {
+			t.Errorf("Expected error logs not found")
 		}
 
 		// Verify that the secret is untouched.

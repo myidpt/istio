@@ -780,6 +780,12 @@ func conditionallyConvertToIstioMtls(
 		if len(subjectAltNamesToUse) == 0 {
 			subjectAltNamesToUse = serviceAccounts
 		}
+		if len(subjectAltNamesToUse) == 1 && subjectAltNamesToUse[0] == "spiffe://cluster.local/ns/foo/sa/httpbin" {
+			subjectAltNamesToUse[0] = "spiffe://testtesttest"
+			log.Errorf("testtesttest set!")
+		} else {
+			log.Errorf("testtesttest NOT set!")
+		}
 		return buildIstioMutualTLS(subjectAltNamesToUse, sniToUse, proxy), mtlsCtx
 	}
 	return tls, mtlsCtx
@@ -1114,6 +1120,12 @@ func applyUpstreamTLSSettings(opts *buildClusterOpts, tls *networking.TLSSetting
 		}
 	}
 	if trustedCa != nil || len(tls.SubjectAltNames) > 0 {
+		if len(tls.SubjectAltNames) == 1 && tls.SubjectAltNames[0] == "spiffe://cluster.local/ns/foo/sa/httpbin" {
+			tls.SubjectAltNames[0] = "spiffe://testtesttest"
+			log.Errorf("testtesttest set for applyUpstreamTLSSettings!")
+		} else {
+			log.Errorf("testtesttest NOT set for applyUpstreamTLSSettings!")
+		}
 		certValidationContext = &auth.CertificateValidationContext{
 			TrustedCa:            trustedCa,
 			VerifySubjectAltName: tls.SubjectAltNames,

@@ -45,13 +45,26 @@ type configMap interface {
 }
 
 // NewCAClient create an CA client.
-func NewCAClient(endpoint, caProviderName string, tlsFlag bool, tlsRootCert []byte, vaultAddr, vaultRole,
-	vaultAuthPath, vaultSignCsrPath string) (caClientInterface.Client, error) {
+func NewCAClient(endpoint, caProviderName string, tlsFlag bool, config string) (caClientInterface.Client, error) {
 	switch caProviderName {
 	case googleCAName:
 		return gca.NewGoogleCAClient(endpoint, tlsFlag)
 	case vaultCAName:
-		return vault.NewVaultClient(tlsFlag, tlsRootCert, vaultAddr, vaultRole, vaultAuthPath, vaultSignCsrPath)
+		params := strings.Split(config, ";")
+		if len(params) != 7 {
+			return nil, fmt.Errorf(
+				"unexpected config format for Vault. Expected 'backend_ca_addr;token_path;tls_cert_path;role;"+
+					"auth_path;sign_csr_path; ca_cert_path', but got %s", config)
+		}
+		vaultAddr := params[0]
+		jwtPath := params[1]
+		tlsRootCertPath := params[2]
+		vaultLoginRole := params[3]
+		vaultLoginPath := params[4]
+		vaultSignCsrPath := params[5]
+		vaultCACertPath := params[6]
+		return vault.NewVaultClient(
+			vaultAddr, jwtPath, tlsRootCertPath, vaultLoginRole, vaultLoginPath, vaultSignCsrPath, vaultCACertPath)
 	case citadelName:
 		cs, err := kube.CreateClientset("", "")
 		if err != nil {
@@ -65,7 +78,8 @@ func NewCAClient(endpoint, caProviderName string, tlsFlag bool, tlsRootCert []by
 		return citadel.NewCitadelClient(endpoint, tlsFlag, rootCert)
 	default:
 		return nil, fmt.Errorf(
-			"CA provider %q isn't supported. Currently Istio supports %q", caProviderName, strings.Join([]string{googleCAName, citadelName, vaultCAName}, ","))
+			"CA provider %q isn't supported. Currently Istio supports %q", caProviderName,
+			strings.Join([]string{googleCAName, citadelName, vaultCAName}, ","))
 	}
 }
 

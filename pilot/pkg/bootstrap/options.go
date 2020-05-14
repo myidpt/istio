@@ -85,6 +85,10 @@ type PilotArgs struct {
 	ForceStop bool
 	// Optional TLS configuration
 	TLSOptions TLSOptions
+	// When using Istio CA as an RA, the name of the backend CA. Supported names: None, Vault.
+	BackendCAName string
+	// Optional configuration needed to configure the Istio CA.
+	CAConfig string
 }
 
 // DiscoveryServiceOptions contains options for create a new discovery

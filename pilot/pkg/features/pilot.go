@@ -316,4 +316,11 @@ var (
 		"If this is set to true, one Istiod will control remote clusters including CA.").Get()
 	EnableCAServer = env.RegisterBoolVar("ENABLE_CA_SERVER", true,
 		"If this is set to false, will not create CA server in istiod.").Get()
+	BackendCA = env.RegisterStringVar("BACKEND_CA", "",
+		"If this is set, will connect Istiod to a backend CA. Istiod serves as an RA. May require extra configuration "+
+			"in CA_CONFIG.")
+	// CAConfig is the extra configuration for Istio CA. Currently for setting up the connection to backend CA.
+	// Usage can be extended.
+	CAConfig = env.RegisterStringVar("CA_CONFIG", "",
+		"Extra CA configuration. Used when istiod connects to a backend CA.")
 )

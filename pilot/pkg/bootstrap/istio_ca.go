@@ -43,6 +43,7 @@ import (
 	"istio.io/istio/pkg/spiffe"
 	"istio.io/istio/security/pkg/cmd"
 	"istio.io/istio/security/pkg/pki/ca"
+	"istio.io/istio/security/pkg/pki/ra"
 	caserver "istio.io/istio/security/pkg/server/ca"
 	"istio.io/istio/security/pkg/server/ca/authenticate"
 )
@@ -124,10 +125,13 @@ const (
 	identityTemplate  = "spiffe://%s/ns/%s/sa/%s"
 )
 
+// CAOptions is the configuration to set up Istio CA.
 type CAOptions struct {
 	// domain to use in SPIFFE identity URLs
-	TrustDomain string
-	Namespace   string
+	TrustDomain   string
+	Namespace     string
+	BackendCAName string
+	Config        string
 }
 
 // EnableCA returns whether CA functionality is enabled in istiod.
@@ -407,7 +411,12 @@ func (s *Server) initPublicKey() error {
 	return nil
 }
 
-func (s *Server) createCA(client corev1.CoreV1Interface, opts *CAOptions) (*ca.IstioCA, error) {
+func (s *Server) createCA(client corev1.CoreV1Interface, opts *CAOptions) (ca.IstioCARA, error) {
+	if len(opts.BackendCAName) != 0 {
+		// Running Istio CA as an RA with a backend CA.
+		return ra.NewIstioRA(opts.TrustDomain, opts.BackendCAName, opts.Config)
+	}
+
 	var caOpts *ca.IstioCAOptions
 	var err error
 

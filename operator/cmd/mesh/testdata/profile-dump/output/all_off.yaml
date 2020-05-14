@@ -97,8 +97,8 @@ spec:
         service:
           ports:
           - name: status-port
-            port: 15020
-            targetPort: 15020
+            port: 15021
+            targetPort: 15021
           - name: http2
             port: 80
             targetPort: 8080
@@ -201,9 +201,13 @@ spec:
             maxSurge: 100%
             maxUnavailable: 25%
   hub: gcr.io/istio-testing
+  meshConfig:
+    enablePrometheusMerge: false
   profile: default
   tag: latest
   values:
+    base:
+      enableCRDTemplates: false
     clusterResources: true
     gateways:
       istio-egressgateway:
@@ -414,8 +418,6 @@ spec:
       service:
         annotations: {}
       tag: v1.15
-    meshConfig:
-      enablePrometheusMerge: false
     mixer:
       adapters:
         kubernetesenv:

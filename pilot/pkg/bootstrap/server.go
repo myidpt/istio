@@ -123,7 +123,7 @@ type Server struct {
 	httpsMux         *http.ServeMux // webhooks
 	kubeRegistry     *kubecontroller.Controller
 	certController   *chiron.WebhookController
-	ca               *ca.IstioCA
+	ca               ca.IstioCARA
 	// path to the caBundle that signs the DNS certs. This should be agnostic to provider.
 	caBundlePath string
 
@@ -194,8 +194,10 @@ func NewServer(args *PilotArgs) (*Server, error) {
 
 	// Options based on the current 'defaults' in istio.
 	caOpts := &CAOptions{
-		TrustDomain: s.environment.Mesh().TrustDomain,
-		Namespace:   args.Namespace,
+		TrustDomain:   s.environment.Mesh().TrustDomain,
+		Namespace:     args.Namespace,
+		BackendCAName: features.BackendCA.Get(),
+		Config:        features.CAConfig.Get(),
 	}
 
 	s.EnvoyXdsServer.Generators["grpc"] = &grpcgen.GrpcConfigGenerator{}
@@ -293,7 +295,7 @@ func NewServer(args *PilotArgs) (*Server, error) {
 	// Run the SDS signing server.
 	// RunCA() must be called after createCA() and initDNSListener()
 	// because it depends on the following conditions:
-	// 1) CA certificate has been created.
+	// 1) CA certificate has been created or RA has been successfully set up.
 	// 2) grpc server has been started.
 	if s.ca != nil {
 		s.addStartFunc(func(stop <-chan struct{}) error {
